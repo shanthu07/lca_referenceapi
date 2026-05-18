@@ -96,24 +96,16 @@ export const getEmissionFactorList = asyncHandler(
       .input("ScopeLevel", scopeLevel)
       .input(
         "IsActive",
-        isActive !== null && isActive !== undefined
-          ? Number(isActive)
-          : null
+        isActive !== null && isActive !== undefined ? Number(isActive) : null,
       )
-      .input(
-        "SourceID",
-        sourceId ? Number(sourceId) : null
-      )
+      .input("SourceID", sourceId ? Number(sourceId) : null)
       .input("PageNo", Number(pageNo))
       .input("PageSize", Number(pageSize))
       .execute("lca_common.gs_GetEmissionFactorList");
 
     const rows = result.recordset ?? [];
 
-    const totalRecords =
-      rows.length > 0
-        ? rows[0].TotalRecords
-        : 0;
+    const totalRecords = rows.length > 0 ? rows[0].TotalRecords : 0;
 
     res.json(
       successResponse(
@@ -123,191 +115,149 @@ export const getEmissionFactorList = asyncHandler(
             pageNo: Number(pageNo),
             pageSize: Number(pageSize),
             totalRecords,
-            totalPages: Math.ceil(
-              totalRecords / Number(pageSize)
-            ),
+            totalPages: Math.ceil(totalRecords / Number(pageSize)),
           },
         },
-        "Emission factor list fetched"
-      )
+        "Emission factor list fetched",
+      ),
     );
-  }
+  },
 );
 
 export const getEmissionFactorSetup = asyncHandler(
   async (req: Request, res: Response) => {
-    const {
-      mode,
-      id,
-    } = req.query;
+    const { mode, id } = req.query;
 
     const pool = await getPool();
 
     const result = await pool
       .request()
       .input("Mode", mode)
-      .input(
-        "FactorID",
-        id ? Number(id) : null
-      )
+      .input("FactorID", id ? Number(id) : null)
       .execute("lca_common.gs_GetEmissionFactorSetup");
 
     const recordsets = Array.isArray(result.recordsets)
       ? result.recordsets
       : [];
 
-    const [
-      factorDetails = [],
-      mixDetails = [],
-      uiMeta = [],
-    ] = recordsets;
+    const [factorDetails = [], mixDetails = [], uiMeta = []] = recordsets;
 
     res.json(
       successResponse(
         {
-          factor:
-            factorDetails[0] ?? null,
+          factor: factorDetails[0] ?? null,
 
           mixDetails,
 
-          uiMeta:
-            uiMeta[0] ?? {},
+          uiMeta: uiMeta[0] ?? {},
         },
-        "Emission factor setup fetched"
-      )
+        "Emission factor setup fetched",
+      ),
     );
-  }
+  },
 );
 
 export const saveEmissionFactor = asyncHandler(
   async (req: Request, res: Response) => {
     const pool = await getPool();
 
-    const {
-      mix = [],
-      ...payload
-    } = req.body;
+    const { Mix = [] } = req.body;
 
-    // --------------------------------------------------
+    // ----------------------------
     // TVP
-    // --------------------------------------------------
+    // ----------------------------
+    const tvp = new sql.Table("lca_common.tt_EmissionFactorMix");
 
-    const tvp = new sql.Table(
-      "lca_common.tt_EmissionFactorMix"
-    );
+    tvp.columns.add("ComponentName", sql.NVarChar(150));
+    tvp.columns.add("Percentage", sql.Decimal(9, 4));
+    tvp.columns.add("SortOrder", sql.Int);
 
-    tvp.columns.add(
-      "ComponentName",
-      sql.NVarChar(150)
-    );
-
-    tvp.columns.add(
-      "Percentage",
-      sql.Decimal(9, 4)
-    );
-
-    tvp.columns.add(
-      "SortOrder",
-      sql.Int
-    );
-
-    if (Array.isArray(mix)) {
-      mix.forEach((item: any) => {
+    if (Array.isArray(Mix)) {
+      Mix.forEach((m: any) => {
         tvp.rows.add(
-          item.componentName ?? null,
-          item.percentage ?? 0,
-          item.sortOrder ?? 0
+          m.ComponentName ?? null,
+          Number(m.Percentage ?? 0),
+          m.SortOrder ?? 0,
         );
       });
     }
 
-    // --------------------------------------------------
-    // REQUEST
-    // --------------------------------------------------
-
     const request = pool.request();
 
-    const inputMap: Record<string, any> = {
-      FactorID: payload.factorID ?? null,
+    // ----------------------------
+    // PARAMS
+    // ----------------------------
+    request.input("FactorID", req.body.FactorID ?? null);
 
-      CategoryID: payload.categoryID,
-      FactorName: payload.factorName,
+    request.input("CategoryID", req.body.CategoryID);
+    request.input("FactorName", req.body.FactorName);
 
-      EF_Type: payload.efType,
+    request.input("EF_Type", req.body.EF_Type);
 
-      EF_CO2: payload.efCO2 ?? 0,
-      EF_CH4: payload.efCH4 ?? 0,
-      EF_N2O: payload.efN2O ?? 0,
-      EF_CO2e: payload.efCO2e,
+    request.input("EF_CO2", req.body.EF_CO2 ?? 0);
+    request.input("EF_CH4", req.body.EF_CH4 ?? 0);
+    request.input("EF_N2O", req.body.EF_N2O ?? 0);
+    request.input("EF_CO2e", req.body.EF_CO2e);
 
-      EF_UnitID: payload.efUnitID ?? null,
-      CurrencyCode: payload.currencyCode ?? null,
+    request.input("EF_UnitID", req.body.EF_UnitID ?? null);
+    request.input("CurrencyCode", req.body.CurrencyCode ?? null);
 
-      ScopeLevel: payload.scopeLevel,
+    request.input("ScopeLevel", req.body.ScopeLevel);
 
-      RegionID: payload.regionID ?? null,
-      CountryID: payload.countryID ?? null,
-      StateID: payload.stateID ?? null,
-      CityID: payload.cityID ?? null,
-      TenantID: payload.tenantID ?? null,
+    request.input("RegionID", req.body.RegionID ?? null);
+    request.input("CountryID", req.body.CountryID ?? null);
+    request.input("StateID", req.body.StateID ?? null);
+    request.input("CityID", req.body.CityID ?? null);
+    request.input("TenantID", req.body.TenantID ?? null);
 
-      SourceID: payload.sourceID ?? null,
-      ProcessID: payload.processID ?? null,
-      IndustryID: payload.industryID ?? null,
-      ProductID: payload.productID ?? null,
+    request.input("SourceID", req.body.SourceID ?? null);
+    request.input("ProcessID", req.body.ProcessID ?? null);
+    request.input("IndustryID", req.body.IndustryID ?? null);
+    request.input("ProductID", req.body.ProductID ?? null);
 
-      IsCompositeFactor:
-        payload.isCompositeFactor ?? false,
+    request.input("IsCompositeFactor", req.body.IsCompositeFactor ?? false);
 
-      Note: payload.note ?? null,
+    request.input("Note", req.body.Note ?? null);
 
-      EffectiveFrom: payload.effectiveFrom,
-      EffectiveTo: payload.effectiveTo ?? null,
+    request.input("EffectiveFrom", req.body.EffectiveFrom);
+    request.input("EffectiveTo", req.body.EffectiveTo ?? null);
 
-      IsActive: payload.isActive ?? true,
-    };
+    request.input("IsActive", req.body.IsActive ?? true);
 
-    Object.entries(inputMap).forEach(
-      ([key, value]) => {
-        request.input(key, value);
-      }
-    );
-
+    // TVP
     request.input("Mix", tvp);
 
-    // --------------------------------------------------
+    // ----------------------------
     // EXECUTE
-    // --------------------------------------------------
+    // ----------------------------
+    const result = await request.execute("lca_common.gs_UpsertEmissionFactor");
 
-    const result = await request.execute(
-      "lca_common.gs_UpsertEmissionFactor"
-    );
-
-    const recordsets = Array.isArray(
-      result.recordsets
-    )
+    const recordsets = Array.isArray(result.recordsets)
       ? result.recordsets
       : [];
 
-    const [
-      saveResult = [],
-      auditLogs = [],
-    ] = recordsets;
+    const [saveResult = [], auditLogs = []] = recordsets;
 
-    // --------------------------------------------------
-    // RESPONSE
-    // --------------------------------------------------
+    const response = saveResult[0] ?? {};
 
-    res.json(
+    if (response?.Success === 0) {
+      return res
+        .status(400)
+        .json(
+          successResponse(
+            { result: response, auditLogs },
+            response?.ErrorMessage || "Save failed",
+          ),
+        );
+    }
+
+    return res.json(
       successResponse(
-        {
-          result: saveResult[0] ?? {},
-          auditLogs,
-        },
-        "Emission factor saved successfully"
-      )
+        { result: response, auditLogs },
+        "Emission factor saved successfully",
+      ),
     );
-  }
+  },
 );
 
 export const deleteEmissionFactor = asyncHandler(
@@ -323,9 +273,7 @@ export const deleteEmissionFactor = asyncHandler(
     const result = await pool
       .request()
       .input("FactorID", factorID)
-      .execute(
-        "lca_common.gs_DeleteEmissionFactor"
-      );
+      .execute("lca_common.gs_DeleteEmissionFactor");
 
     const recordsets = Array.isArray(result.recordsets)
       ? result.recordsets
@@ -340,8 +288,8 @@ export const deleteEmissionFactor = asyncHandler(
           result: deleteResult[0] ?? {},
           auditLogs,
         },
-        "Emission factor deleted successfully"
-      )
+        "Emission factor deleted successfully",
+      ),
     );
-  }
+  },
 );
