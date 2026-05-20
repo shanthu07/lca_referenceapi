@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import { successResponse } from "../../../utils/response";
+import {
+	errorResponse,
+	getErrorMeta,
+	successResponse,
+} from "../../../utils/response";
 import sql, { getPool } from "../../../config/db";
 
 export const getEmissionFactorReferenceData = asyncHandler(
@@ -241,12 +245,19 @@ export const saveEmissionFactor = asyncHandler(
     const response = saveResult[0] ?? {};
 
     if (response?.Success === 0) {
+      const errorCode = response?.ErrorCode ?? response?.Errorcode ?? null;
+      const errorMeta = getErrorMeta(errorCode);
+      const friendlyMessage =
+        errorMeta?.message || response?.ErrorMessage || "Save failed";
+
       return res
         .status(400)
         .json(
-          successResponse(
+          errorResponse(
+            friendlyMessage,
             { result: response, auditLogs },
-            response?.ErrorMessage || "Save failed",
+            errorCode ?? undefined,
+            errorMeta?.field ?? null,
           ),
         );
     }
