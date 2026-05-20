@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../config/logger";
+import { errorResponse } from "../utils/response";
 
 export const errorHandler = (
   err: any,
@@ -15,9 +16,16 @@ export const errorHandler = (
     url: req.originalUrl,
   });
 
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Internal Server Error",
-    correlationId: req.correlationId,
-  });
+  res.status(err.status || 500).json(
+    errorResponse(
+      err.message || "Internal Server Error",
+      {
+        correlationId: req.correlationId,
+        originalUrl: req.originalUrl,
+        error: err,
+      },
+      err.code,
+      err.field ?? null,
+    ),
+  );
 };
