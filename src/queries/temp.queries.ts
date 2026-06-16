@@ -30,3 +30,25 @@ export const GET_PROCESS_MASTER_BY_INDUSTRY = `
   WHERE IndustryID = @industryId
   ORDER BY ProcessCategoryID, ProcessName
 `;
+
+export const GET_PROCESS_CATEGORY_MASTER_WITH_PROCESSES = `
+SELECT
+    pc.ProcessCategoryID,
+    pc.IndustryId,
+    pc.CategoryName,
+    pc.Description,
+    pc.ParentCategoryID,
+    pc.IsActive,
+
+    pm.ProcessID,
+    pm.ProcessName,
+    pm.Description AS ProcessDescription,
+    pm.IsMandatoryDefault,
+    pm.IsActive AS ProcessIsActive
+FROM lca_common.gs_ProcessCategoryMaster pc
+LEFT JOIN lca_common.gs_ProcessMaster pm
+    ON pm.ProcessCategoryID = pc.ProcessCategoryID
+   AND pm.IndustryID = pc.IndustryId
+WHERE pc.IndustryId = @industryId
+ORDER BY pc.ProcessCategoryID, pm.ProcessName;
+`;

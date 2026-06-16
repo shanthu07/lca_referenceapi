@@ -4,52 +4,70 @@ import { successResponse } from "../../../utils/response";
 import { getPool } from "../../../config/db";
 import {
   GET_PROCESS_CATEGORY_MASTER,
-  GET_PROCESS_MASTER_BY_INDUSTRY,
+  GET_PROCESS_CATEGORY_MASTER_WITH_PROCESSES,
 } from "../../../queries/temp.queries";
 
 export const getProcessCategoryMaster = asyncHandler(
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
+    const industryId = Number(req.params.industryId);
+    const includeProcesses = req.query.includeProcesses === "true";
+
     const pool = await getPool();
-    const request = pool.request();
-    const industryId = _req.params.industryId as string | undefined;
-    const includeProcesses = _req.query.includeProcesses === "true";
 
-    if (industryId) {
-      request.input("industryId", industryId);
+    // Categories only
+    if (!includeProcesses) {
+      const result = await pool
+        .request()
+        .input("industryId", industryId)
+        .query(GET_PROCESS_CATEGORY_MASTER);
+
+      return res.json(
+        successResponse(
+          result.recordset,
+          "Process Category Master fetched successfully"
+        )
+      );
     }
 
-    const categoryResult = await request.query(GET_PROCESS_CATEGORY_MASTER);
-    let data: any[] = categoryResult.recordset;
+    // Categories + Processes
+    const result = await pool
+      .request()
+      .input("industryId", industryId)
+      .query(GET_PROCESS_CATEGORY_MASTER_WITH_PROCESSES);
 
-    if (includeProcesses) {
-      const processRequest = pool.request();
-      processRequest.input("industryId", industryId);
+    const categoryMap = new Map<number, any>();
 
-      const processResult = await processRequest.query(
-        GET_PROCESS_MASTER_BY_INDUSTRY
-      );
-      const processesByCategory = processResult.recordset.reduce(
-        (acc: Record<string, any[]>, process) => {
-          const categoryId = String(process.ProcessCategoryID);
-          acc[categoryId] = acc[categoryId] ?? [];
-          acc[categoryId].push(process);
-          return acc;
-        },
-        {}
-      );
+    result.recordset.forEach((row) => {
+      const categoryId = row.ProcessCategoryID;
 
-      data = categoryResult.recordset.map((category) => {
-        return {
-          ...category,
-          ProcessMaster:
-            processesByCategory[String(category.ProcessCategoryID)] ?? [],
-        };
-      });
-    }
+      if (!categoryMap.has(categoryId)) {
+        categoryMap.set(categoryId, {
+          ProcessCategoryID: row.ProcessCategoryID,
+          IndustryId: row.IndustryId,
+          CategoryName: row.CategoryName,
+          Description: row.Description,
+          ParentCategoryID: row.ParentCategoryID,
+          IsActive: row.IsActive,
+          ProcessMaster: [],
+        });
+      }
 
-    res.json(
+      if (row.ProcessID) {
+        categoryMap.get(categoryId).ProcessMaster.push({
+          ProcessID: row.ProcessID,
+          IndustryID: row.IndustryId,
+          ProcessCategoryID: row.ProcessCategoryID,
+          ProcessName: row.ProcessName,
+          Description: row.ProcessDescription,
+          IsMandatoryDefault: row.IsMandatoryDefault,
+          IsActive: row.ProcessIsActive,
+        });
+      }
+    });
+
+    return res.json(
       successResponse(
-        data,
+        Array.from(categoryMap.values()),
         "Process Category Master fetched successfully"
       )
     );
