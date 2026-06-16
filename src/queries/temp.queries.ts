@@ -4,3 +4,29 @@ export const GET_COUNTRIES = `
   WHERE IsActive = @isActive
   ORDER BY CountryName
 `;
+
+export const GET_PROCESS_CATEGORY_MASTER = `
+  SELECT 
+    ProcessCategoryID,
+    IndustryId,
+    CategoryName,
+    Description,
+    ParentCategoryID,
+    IsActive
+  FROM lca_common.gs_ProcessCategoryMaster
+  WHERE IndustryId = @industryId
+`;
+
+export const GET_PROCESS_MASTER_BY_INDUSTRY = `
+  SELECT
+    ProcessID,
+    IndustryID,
+    ProcessCategoryID,
+    ProcessName,
+    Description,
+    IsMandatoryDefault,
+    IsActive
+  FROM lca_common.gs_ProcessMaster
+  WHERE IndustryID = @industryId
+  ORDER BY ProcessCategoryID, ProcessName
+`;

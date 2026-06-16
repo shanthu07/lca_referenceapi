@@ -13,6 +13,7 @@ import testRoutes from "./routes/test.routes";
 import efRoutes from "./routes/modules/ef_factor/ef.routes";
 
 import { swaggerServe, swaggerSetup } from "./config/swagger";
+import tempRoutes from "./routes/scenario_analysis/temp_routes";
 
 const app = express();
 
@@ -143,6 +144,9 @@ app.use("/api/v1/test", testRoutes);
 
 // Emission Factor Routes
 app.use("/api/v1/ef", efRoutes);
+
+//Temp Routes
+app.use("/api/v1/temp", tempRoutes);
 
 // GLOBAL ERROR HANDLER
 app.use(errorHandler);
