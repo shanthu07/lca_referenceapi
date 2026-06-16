@@ -377,3 +377,35 @@ paths:
 
         "400":
           description: Invalid factor
+
+  /api/v1/temp/processmaster/{industryId}:
+    get:
+      summary: Get Process Category Master
+      tags:
+        - Scenario Analysis
+
+      security:
+        - ApiKeyAuth: []
+
+      parameters:
+        - in: path
+          name: industryId
+          required: true
+          schema:
+            type: integer
+          description: Industry ID
+
+        - in: query
+          name: includeProcesses
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: When true, includes all process master records under their matching process category.
+
+      responses:
+        "200":
+          description: Process category master data fetched successfully. Includes process master data when includeProcesses is true.
+
+        "400":
+          description: Invalid industryId supplied
