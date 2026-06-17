@@ -409,3 +409,277 @@ paths:
 
         "400":
           description: Invalid industryId supplied
+
+  /api/v1/temp/myprocess:
+    get:
+      summary: Get My Process
+      tags:
+        - Scenario Analysis
+
+      security:
+        - ApiKeyAuth: []
+
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+          description: Tenant ID
+
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: integer
+          description: User ID
+
+      responses:
+        "200":
+          description: My Process data fetched successfully
+
+        "400":
+          description: tenantId and userId are required
+
+    post:
+      summary: Add My Process
+      tags:
+        - Scenario Analysis
+
+      security:
+        - ApiKeyAuth: []
+
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+          description: Tenant ID
+
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: integer
+          description: User ID
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - processId
+              properties:
+                processId:
+                  type: integer
+                  example: 1
+                activityDescription:
+                  type: string
+                  example: Electricity consumption for production line
+
+      responses:
+        "200":
+          description: Process added successfully or already exists
+
+        "400":
+          description: tenantId, userId and processId are required
+
+    delete:
+      summary: Delete My Process
+      tags:
+        - Scenario Analysis
+
+      security:
+        - ApiKeyAuth: []
+
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+          description: Tenant ID
+
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: integer
+          description: User ID
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - processId
+              properties:
+                processId:
+                  type: integer
+                  example: 1
+
+      responses:
+        "200":
+          description: Process deleted successfully or not found
+
+        "400":
+          description: tenantId, userId and processId are required
+
+  /api/v1/temp/scenario-process:
+    post:
+      summary: Save Scenario Process
+      tags:
+        - Scenario Analysis
+
+      security:
+        - ApiKeyAuth: []
+
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+          description: Tenant ID
+
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: integer
+          description: User ID
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - scenarioId
+                - processId
+              properties:
+                scenarioId:
+                  type: integer
+                  example: 1
+                processId:
+                  type: integer
+                  example: 10
+                amount:
+                  type: number
+                  example: 125.5
+                activityDescription:
+                  type: string
+                  example: Electricity consumption for production line
+
+      responses:
+        "200":
+          description: Scenario process saved successfully
+
+        "400":
+          description: tenantId, userId, scenarioId and processId are required
+
+  /api/v1/temp/scenario-process/bulk:
+    post:
+      summary: Save Scenario Processes Bulk
+      tags:
+        - Scenario Analysis
+
+      security:
+        - ApiKeyAuth: []
+
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+          description: Tenant ID
+
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: integer
+          description: User ID
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - scenarioId
+                - processes
+              properties:
+                scenarioId:
+                  type: integer
+                  example: 1
+                processes:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - processId
+                    properties:
+                      processId:
+                        type: integer
+                        example: 1
+                      amount:
+                        type: number
+                        example: 260
+                      activityDescription:
+                        type: string
+                        example: Electricity consumption
+                  example:
+                    - processId: 1
+                      amount: 260
+                      activityDescription: Electricity consumption
+                    - processId: 2
+                      amount: 120.5
+                      activityDescription: Diesel consumption
+
+      responses:
+        "200":
+          description: Scenario processes saved successfully
+
+        "400":
+          description: tenantId, userId, scenarioId and processes are required
+
+  /api/v1/temp/scenario-process/details:
+    get:
+      summary: Get Scenario Details
+      tags:
+        - Scenario Analysis
+
+      security:
+        - ApiKeyAuth: []
+
+      parameters:
+
+        - in: query
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+          description: Tenant ID
+
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: integer
+          description: User ID
+
+      responses:
+        "200":
+          description: Scenario details fetched successfully
+
+        "400":
+          description: tenantId, userId and scenarioId are required
