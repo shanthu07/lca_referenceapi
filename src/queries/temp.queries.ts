@@ -52,3 +52,94 @@ LEFT JOIN lca_common.gs_ProcessMaster pm
 WHERE pc.IndustryId = @industryId
 ORDER BY pc.ProcessCategoryID, pm.ProcessName;
 `;
+
+export const GET_MY_PROCESS = `
+  SELECT MyProcessId, TenantId, UserId, ProcessId, ActivityDescription, Amount
+  FROM [LCA_MyProcess]
+  WHERE TenantId = @TenantId AND UserId = @UserId
+`;
+
+
+export const ADD_MY_PROCESS = `
+IF EXISTS (
+    SELECT 1
+    FROM LCA_MyProcess
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ProcessId = @ProcessId
+)
+BEGIN
+    SELECT 0 AS Inserted
+END
+ELSE
+BEGIN
+    INSERT INTO LCA_MyProcess (TenantId, UserId, ProcessId, ActivityDescription)
+    VALUES (@TenantId, @UserId, @ProcessId, @ActivityDescription)
+
+    SELECT 1 AS Inserted
+END
+`;
+
+
+export const DELETE_MY_PROCESS = `
+DELETE FROM LCA_MyProcess
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+  AND ProcessId = @ProcessId
+`;
+
+
+export const UPSERT_SCENARIO_PROCESS = `
+IF EXISTS (
+    SELECT 1 FROM LCA_ScenarioProcess
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId
+      AND ProcessId = @ProcessId
+)
+BEGIN
+    UPDATE LCA_ScenarioProcess
+    SET 
+        Amount = @Amount,
+        ActivityDescription = @ActivityDescription
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId
+      AND ProcessId = @ProcessId
+
+    SELECT 1 AS Updated
+END
+ELSE
+BEGIN
+    INSERT INTO LCA_ScenarioProcess
+    (
+        TenantId,
+        UserId,
+        ScenarioId,
+        ProcessId,
+        Amount,
+        ActivityDescription,
+        CreatedOn
+    )
+    VALUES
+    (
+        @TenantId,
+        @UserId,
+        @ScenarioId,
+        @ProcessId,
+        @Amount,
+        @ActivityDescription,
+        GETDATE()
+    )
+
+    SELECT 1 AS Inserted
+END
+`;
+
+export const GET_SCENARIO_DETAILS = `
+  SELECT *
+  FROM LCA_ScenarioProcess
+  WHERE TenantId = @TenantId
+    AND UserId = @UserId
+  ORDER BY ProcessId
+`;
