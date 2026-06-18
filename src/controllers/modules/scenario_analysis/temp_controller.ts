@@ -8,6 +8,9 @@ import {
   GET_MY_PROCESS,
   ADD_MY_PROCESS,
   DELETE_MY_PROCESS,
+  CREATE_SCENARIO,
+  GET_MY_SCENARIOS,
+  GET_SCENARIO_BY_ID,
   GET_SCENARIO_DETAILS,
   UPSERT_SCENARIO_PROCESS,
 } from "../../../queries/temp.queries";
@@ -175,23 +178,57 @@ export const deleteMyProcess = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
-export const saveScenarioProcess = asyncHandler(async (req: Request, res: Response) => {
+const addScenarioInputs = (request: any, body: any, tenantId: number, userId: number) => {
+  return request
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioName", body.scenarioName)
+    .input("Description", body.description || null)
+    .input("Ext1", body.ext1 || null)
+    .input("Ext2", body.ext2 || null)
+    .input("Ext3", body.ext3 || null)
+    .input("Ext4", body.ext4 || null)
+    .input("Ext5", body.ext5 || null);
+};
+
+export const createScenario = asyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+
+  const tenantId = Number(user?.tenantId || req.query.tenantId);
+  const userId = Number(user?.id || req.query.userId);
+  const scenarioName = req.body.scenarioName?.trim();
+
+  if (!tenantId || !userId || !scenarioName) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioName are required",
+    });
+  }
+
+  const pool = await getPool2();
+
+  const result = await addScenarioInputs(
+    pool.request(),
+    { ...req.body, scenarioName },
+    tenantId,
+    userId
+  ).query(CREATE_SCENARIO);
+
+  return res.status(201).json(
+    successResponse(result.recordset?.[0], "Scenario created successfully")
+  );
+});
+
+export const getMyScenarios = asyncHandler(async (req: Request, res: Response) => {
   const user = (req as any).user;
 
   const tenantId = Number(user?.tenantId || req.query.tenantId);
   const userId = Number(user?.id || req.query.userId);
 
-  const {
-    scenarioId,
-    processId,
-    amount,
-    activityDescription,
-  } = req.body;
-
-  if (!tenantId || !userId || !scenarioId || !processId) {
+  if (!tenantId || !userId) {
     return res.status(400).json({
       success: false,
-      message: "tenantId, userId, scenarioId and processId are required",
+      message: "tenantId and userId are required",
     });
   }
 
@@ -201,16 +238,90 @@ export const saveScenarioProcess = asyncHandler(async (req: Request, res: Respon
     .request()
     .input("TenantId", tenantId)
     .input("UserId", userId)
-    .input("ScenarioId", scenarioId)
-    .input("ProcessId", processId)
-    .input("Amount", amount)
-    .input("ActivityDescription", activityDescription)
-    .query(UPSERT_SCENARIO_PROCESS);
+    .query(GET_MY_SCENARIOS);
 
-  return res.json({
-    success: true,
-    message: "Scenario process saved successfully",
-  });
+  return res.json(
+    successResponse(result.recordset, "Scenarios fetched successfully")
+  );
+});
+
+export const saveScenarioProcess = asyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+
+  const tenantId = Number(user?.tenantId || req.query.tenantId);
+  const userId = Number(user?.id || req.query.userId);
+
+  const {
+    processId,
+    amount,
+    activityDescription,
+  } = req.body;
+  let scenarioId = Number(req.body.scenarioId);
+  const scenarioName = req.body.scenarioName?.trim();
+
+  if (!tenantId || !userId || (!scenarioId && !scenarioName) || !processId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId, processId, and either scenarioId or scenarioName are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const transaction = pool.transaction();
+
+  await transaction.begin();
+
+  try {
+    if (!scenarioId) {
+      const scenarioResult = await addScenarioInputs(
+        transaction.request(),
+        { ...req.body, scenarioName },
+        tenantId,
+        userId
+      ).query(CREATE_SCENARIO);
+
+      scenarioId = Number(scenarioResult.recordset?.[0]?.ScenarioId);
+    } else {
+      const scenario = await transaction
+        .request()
+        .input("TenantId", tenantId)
+        .input("UserId", userId)
+        .input("ScenarioId", scenarioId)
+        .query(GET_SCENARIO_BY_ID);
+
+      if (!scenario.recordset?.length) {
+        await transaction.rollback();
+        return res.status(404).json({
+          success: false,
+          message: "Scenario not found",
+        });
+      }
+    }
+
+    await transaction
+      .request()
+      .input("TenantId", tenantId)
+      .input("UserId", userId)
+      .input("ScenarioId", scenarioId)
+      .input("ProcessId", processId)
+      .input("Amount", amount)
+      .input("ActivityDescription", activityDescription)
+      .query(UPSERT_SCENARIO_PROCESS);
+
+    await transaction.commit();
+
+    return res.json({
+      success: true,
+      message: "Scenario process saved successfully",
+      data: {
+        scenarioId,
+        processId,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
 });
 
 export const saveScenarioProcessesBulk = asyncHandler(
@@ -219,13 +330,14 @@ export const saveScenarioProcessesBulk = asyncHandler(
 
     const tenantId = Number(user?.tenantId || req.query.tenantId);
     const userId = Number(user?.id || req.query.userId);
-    const scenarioId = Number(req.body.scenarioId);
+    let scenarioId = Number(req.body.scenarioId);
+    const scenarioName = req.body.scenarioName?.trim();
     const processes = req.body.processes;
 
-    if (!tenantId || !userId || !scenarioId || !Array.isArray(processes) || processes.length === 0) {
+    if (!tenantId || !userId || (!scenarioId && !scenarioName) || !Array.isArray(processes) || processes.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "tenantId, userId, scenarioId and processes are required",
+        message: "tenantId, userId, processes, and either scenarioId or scenarioName are required",
       });
     }
 
@@ -244,6 +356,32 @@ export const saveScenarioProcessesBulk = asyncHandler(
     await transaction.begin();
 
     try {
+      if (!scenarioId) {
+        const scenarioResult = await addScenarioInputs(
+          transaction.request(),
+          { ...req.body, scenarioName },
+          tenantId,
+          userId
+        ).query(CREATE_SCENARIO);
+
+        scenarioId = Number(scenarioResult.recordset?.[0]?.ScenarioId);
+      } else {
+        const scenario = await transaction
+          .request()
+          .input("TenantId", tenantId)
+          .input("UserId", userId)
+          .input("ScenarioId", scenarioId)
+          .query(GET_SCENARIO_BY_ID);
+
+        if (!scenario.recordset?.length) {
+          await transaction.rollback();
+          return res.status(404).json({
+            success: false,
+            message: "Scenario not found",
+          });
+        }
+      }
+
       for (const process of processes) {
         await transaction
           .request()
@@ -262,6 +400,7 @@ export const saveScenarioProcessesBulk = asyncHandler(
         success: true,
         message: "Scenario processes saved successfully",
         data: {
+          scenarioId,
           savedCount: processes.length,
         },
       });
@@ -278,12 +417,14 @@ export const getScenarioDetails = asyncHandler(
 
     const tenantId = Number(user?.tenantId || req.query.tenantId);
     const userId = Number(user?.id || req.query.userId);
-    // const scenarioId = Number(req.params.scenarioId);
+    const scenarioId = req.query.scenarioId
+      ? Number(req.query.scenarioId)
+      : null;
 
     if (!tenantId || !userId) {
       return res.status(400).json({
         success: false,
-        message: "tenantId, userId and scenarioId are required",
+        message: "tenantId and userId are required",
       });
     }
 
@@ -293,7 +434,7 @@ export const getScenarioDetails = asyncHandler(
       .request()
       .input("TenantId", tenantId)
       .input("UserId", userId)
-      // .input("ScenarioId", scenarioId)
+      .input("ScenarioId", scenarioId)
       .query(GET_SCENARIO_DETAILS);
 
     return res.json(
@@ -301,7 +442,7 @@ export const getScenarioDetails = asyncHandler(
         {
           tenantId,
           userId,
-          // scenarioId,
+          scenarioId,
           processes: result.recordset,
         },
         "Scenario details fetched successfully"

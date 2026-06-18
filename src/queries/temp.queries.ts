@@ -88,6 +88,90 @@ WHERE TenantId = @TenantId
   AND ProcessId = @ProcessId
 `;
 
+export const CREATE_SCENARIO = `
+INSERT INTO LCA_MyScenario
+(
+    TenantId,
+    UserId,
+    ScenarioName,
+    Description,
+    Ext1,
+    Ext2,
+    Ext3,
+    Ext4,
+    Ext5,
+    CreatedOn,
+    ModifiedOn
+)
+OUTPUT
+    INSERTED.ScenarioId,
+    INSERTED.TenantId,
+    INSERTED.UserId,
+    INSERTED.ScenarioName,
+    INSERTED.Description,
+    INSERTED.Ext1,
+    INSERTED.Ext2,
+    INSERTED.Ext3,
+    INSERTED.Ext4,
+    INSERTED.Ext5,
+    INSERTED.CreatedOn,
+    INSERTED.ModifiedOn
+VALUES
+(
+    @TenantId,
+    @UserId,
+    @ScenarioName,
+    @Description,
+    @Ext1,
+    @Ext2,
+    @Ext3,
+    @Ext4,
+    @Ext5,
+    GETDATE(),
+    GETDATE()
+)
+`;
+
+export const GET_MY_SCENARIOS = `
+SELECT
+    ScenarioId,
+    TenantId,
+    UserId,
+    ScenarioName,
+    Description,
+    Ext1,
+    Ext2,
+    Ext3,
+    Ext4,
+    Ext5,
+    CreatedOn,
+    ModifiedOn
+FROM LCA_MyScenario
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+ORDER BY ModifiedOn DESC, ScenarioId DESC
+`;
+
+export const GET_SCENARIO_BY_ID = `
+SELECT
+    ScenarioId,
+    TenantId,
+    UserId,
+    ScenarioName,
+    Description,
+    Ext1,
+    Ext2,
+    Ext3,
+    Ext4,
+    Ext5,
+    CreatedOn,
+    ModifiedOn
+FROM LCA_MyScenario
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+  AND ScenarioId = @ScenarioId
+`;
+
 
 export const UPSERT_SCENARIO_PROCESS = `
 IF EXISTS (
@@ -141,5 +225,6 @@ export const GET_SCENARIO_DETAILS = `
   FROM LCA_ScenarioProcess
   WHERE TenantId = @TenantId
     AND UserId = @UserId
+    AND (@ScenarioId IS NULL OR ScenarioId = @ScenarioId)
   ORDER BY ProcessId
 `;
