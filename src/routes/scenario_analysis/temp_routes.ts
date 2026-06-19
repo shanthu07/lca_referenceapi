@@ -3,6 +3,7 @@ import {
   addMyProcess,
   createScenario,
   deleteMyProcess,
+  deleteScenario,
   getMyProcess,
   getMyScenarios,
   getProcessCategoryMaster,
@@ -20,6 +21,7 @@ router.post("/myprocess", addMyProcess);
 router.delete("/myprocess", deleteMyProcess);
 router.get("/scenario", getMyScenarios);
 router.post("/scenario", createScenario);
+router.delete("/scenario/:scenarioId", deleteScenario);
 router.post("/scenario-process", saveScenarioProcess);
 router.post("/scenario-process/bulk", saveScenarioProcessesBulk);
 router.get("/scenario-process/details", getScenarioDetails);

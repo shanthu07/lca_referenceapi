@@ -8,6 +8,7 @@ import {
   GET_MY_PROCESS,
   ADD_MY_PROCESS,
   DELETE_MY_PROCESS,
+  DELETE_SCENARIO,
   CREATE_SCENARIO,
   GET_MY_SCENARIOS,
   GET_SCENARIO_BY_ID,
@@ -56,6 +57,7 @@ export const getProcessCategoryMaster = asyncHandler(
           Description: row.Description,
           ParentCategoryID: row.ParentCategoryID,
           IsActive: row.IsActive,
+          IsRecycled: row.IsRecycled,
           ProcessMaster: [],
         });
       }
@@ -243,6 +245,39 @@ export const getMyScenarios = asyncHandler(async (req: Request, res: Response) =
   return res.json(
     successResponse(result.recordset, "Scenarios fetched successfully")
   );
+});
+
+export const deleteScenario = asyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+
+  const tenantId = Number(user?.tenantId || req.query.tenantId);
+  const userId = Number(user?.id || req.query.userId);
+  const scenarioId = Number(req.params.scenarioId || req.body.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+
+  const result = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .query(DELETE_SCENARIO);
+
+  const deleted = result.rowsAffected?.[0];
+
+  return res.json({
+    success: true,
+    message: deleted
+      ? "Scenario deleted successfully."
+      : "Scenario not found.",
+  });
 });
 
 export const saveScenarioProcess = asyncHandler(async (req: Request, res: Response) => {

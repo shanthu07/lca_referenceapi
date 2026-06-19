@@ -12,7 +12,8 @@ export const GET_PROCESS_CATEGORY_MASTER = `
     CategoryName,
     Description,
     ParentCategoryID,
-    IsActive
+    IsActive,
+    ExtBool1 AS IsRecycled
   FROM lca_common.gs_ProcessCategoryMaster
   WHERE IndustryId = @industryId
 `;
@@ -39,6 +40,7 @@ SELECT
     pc.Description,
     pc.ParentCategoryID,
     pc.IsActive,
+    pc.ExtBool1 AS IsRecycled,
 
     pm.ProcessID,
     pm.ProcessName,
@@ -144,11 +146,13 @@ SELECT
     Ext3,
     Ext4,
     Ext5,
+    IsActive,
     CreatedOn,
     ModifiedOn
 FROM LCA_MyScenario
 WHERE TenantId = @TenantId
   AND UserId = @UserId
+  AND IsActive = 1
 ORDER BY ModifiedOn DESC, ScenarioId DESC
 `;
 
@@ -164,12 +168,25 @@ SELECT
     Ext3,
     Ext4,
     Ext5,
+    IsActive,
     CreatedOn,
     ModifiedOn
 FROM LCA_MyScenario
 WHERE TenantId = @TenantId
   AND UserId = @UserId
   AND ScenarioId = @ScenarioId
+  AND IsActive = 1
+`;
+
+export const DELETE_SCENARIO = `
+UPDATE LCA_MyScenario
+SET
+    IsActive = 0,
+    ModifiedOn = GETDATE()
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+  AND ScenarioId = @ScenarioId
+  AND IsActive = 1
 `;
 
 
@@ -226,5 +243,13 @@ export const GET_SCENARIO_DETAILS = `
   WHERE TenantId = @TenantId
     AND UserId = @UserId
     AND (@ScenarioId IS NULL OR ScenarioId = @ScenarioId)
+    AND EXISTS (
+      SELECT 1
+      FROM LCA_MyScenario
+      WHERE LCA_MyScenario.TenantId = LCA_ScenarioProcess.TenantId
+        AND LCA_MyScenario.UserId = LCA_ScenarioProcess.UserId
+        AND LCA_MyScenario.ScenarioId = LCA_ScenarioProcess.ScenarioId
+        AND LCA_MyScenario.IsActive = 1
+    )
   ORDER BY ProcessId
 `;
