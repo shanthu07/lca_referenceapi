@@ -13,6 +13,10 @@ import {
   GET_MY_SCENARIOS,
   GET_SCENARIO_BY_ID,
   GET_SCENARIO_DETAILS,
+  GET_SCENARIO_AI_WORKSPACE,
+  UPSERT_SCENARIO_AI_WORKSPACE_ASSESSMENT,
+  UPSERT_SCENARIO_AI_WORKSPACE_GOAL_SCOPE,
+  UPSERT_SCENARIO_AI_WORKSPACE_INSIGHTS,
   UPSERT_SCENARIO_PROCESS,
 } from "../../../queries/temp.queries";
 
@@ -485,3 +489,792 @@ export const getScenarioDetails = asyncHandler(
     );
   }
 );
+
+
+
+// ---------------------------    AI Workspace Controllers  ------------------------------------- //
+
+const parseJson = (value: any) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  return value;
+};
+
+const ensureJsonText = (value: any) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return typeof value === "string" ? value : JSON.stringify(value);
+};
+
+const buildAIInputPayload = (
+  scenario: any,
+  processes: any[],
+  assessment: any,
+  goalScope: any,
+) => ({
+  scenarioBlock: {
+    scenario,
+    processes,
+  },
+  aiSelfAssessmentBlock: assessment,
+  goalScopeBlock: goalScope,
+});
+
+const buildAIInsightsPayload = (
+  scenario: any,
+  processes: any[],
+  assessment: any,
+  goalScope: any,
+) => ({
+  processInsights: {
+    processCount: processes?.length ?? 0,
+    summary: `AI generated insights for scenario "${scenario?.ScenarioName || ""}".`,
+    assessmentSummary: assessment ? "Self-assessment available" : "No self-assessment provided",
+    goalScopeSummary: goalScope ? "Goal and scope available" : "No goal and scope provided",
+  },
+  scenarioAnalysis: {
+    scenarioName: scenario?.ScenarioName || null,
+    processHighlights: processes?.map((process) => ({
+      processId: process.ProcessId,
+      activityDescription: process.ActivityDescription,
+      amount: process.Amount,
+    })),
+    goalScope: goalScope || null,
+  },
+  executiveSummary: {
+    overview: `Generated overview for scenario "${scenario?.ScenarioName || ""}".`,
+    recommendation: "Review the result for process hotspots and goal alignment.",
+  },
+});
+
+const getWorkspaceRow = async (
+  pool: any,
+  tenantId: number,
+  userId: number,
+  scenarioId: number,
+) => {
+  const workspaceResult = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .query(GET_SCENARIO_AI_WORKSPACE);
+
+  return workspaceResult.recordset?.[0] || null;
+};
+
+const assertScenarioExists = async (
+  pool: any,
+  tenantId: number,
+  userId: number,
+  scenarioId: number,
+  res: Response,
+) => {
+  const scenarioResult = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .query(GET_SCENARIO_BY_ID);
+
+  if (!scenarioResult.recordset?.length) {
+    res.status(404).json({
+      success: false,
+      message: "Scenario not found",
+    });
+    return null;
+  }
+
+  return scenarioResult.recordset[0];
+};
+
+const saveInsightsSection = async (
+  pool: any,
+  tenantId: number,
+  userId: number,
+  scenarioId: number,
+  sectionKey: "processInsights" | "scenarioAnalysis" | "executiveSummary",
+  sectionValue: any,
+  body: any,
+) => {
+  const workspace = await getWorkspaceRow(pool, tenantId, userId, scenarioId);
+  const existingInsights = parseJson(workspace?.AIInsightsJson) || {};
+
+  const updatedInsights = {
+    ...existingInsights,
+    [sectionKey]: sectionValue,
+  };
+
+  const modelIdFromBody = body.modelId !== undefined ? Number(body.modelId) : null;
+  const modelId = Number.isFinite(modelIdFromBody as number)
+    ? modelIdFromBody
+    : workspace?.ModelId ?? null;
+
+  const promptVersion = body.promptVersion || workspace?.PromptVersion || "lca-insights-v1";
+
+  const inputFromBody = body.aiInput || body.input || (sectionKey === "processInsights" ? sectionValue?.input : null);
+  const aiInputPayload = inputFromBody ?? parseJson(workspace?.AIInputJson);
+
+  const result = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .input("AIInputJson", ensureJsonText(aiInputPayload))
+    .input("AIInsightsJson", ensureJsonText(updatedInsights))
+    .input("ModelId", modelId)
+    .input("PromptVersion", promptVersion)
+    .input("Status", "Generated")
+    .query(UPSERT_SCENARIO_AI_WORKSPACE_INSIGHTS);
+
+  return {
+    workspace: result.recordset?.[0] || null,
+    updatedInsights,
+  };
+};
+
+export const saveAIAssessment = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+  const assessment = req.body.assessment;
+
+  if (!tenantId || !userId || !scenarioId || !assessment) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId, scenarioId and assessment are required",
+    });
+  }
+
+  const pool = await getPool2();
+
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .input("AssessmentJson", ensureJsonText(assessment))
+    .query(UPSERT_SCENARIO_AI_WORKSPACE_ASSESSMENT);
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+      },
+      "Assessment saved",
+    ),
+  );
+});
+
+export const getAIAssessment = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const workspace = await getWorkspaceRow(pool, tenantId, userId, scenarioId);
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        tenantId,
+        userId,
+        assessment: parseJson(workspace?.AssessmentJson),
+      },
+      "Assessment fetched successfully",
+    ),
+  );
+});
+
+export const saveGoalScope = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+  const goalScope = req.body.goalScope;
+
+  if (!tenantId || !userId || !scenarioId || !goalScope) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId, scenarioId and goalScope are required",
+    });
+  }
+
+  const pool = await getPool2();
+
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .input("GoalScopeJson", ensureJsonText(goalScope))
+    .query(UPSERT_SCENARIO_AI_WORKSPACE_GOAL_SCOPE);
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+      },
+      "Goal and scope saved",
+    ),
+  );
+});
+
+export const getGoalScope = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const workspace = await getWorkspaceRow(pool, tenantId, userId, scenarioId);
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        tenantId,
+        userId,
+        goalScope: parseJson(workspace?.GoalScopeJson),
+      },
+      "Goal scope fetched successfully",
+    ),
+  );
+});
+
+export const saveProcessInsights = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+  const processInsights = req.body.processInsights;
+
+  if (!tenantId || !userId || !scenarioId || !processInsights) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId, scenarioId and processInsights are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const result = await saveInsightsSection(
+    pool,
+    tenantId,
+    userId,
+    scenarioId,
+    "processInsights",
+    processInsights,
+    req.body,
+  );
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        section: "process-insights",
+        savedAt: result.workspace?.ModifiedOn || new Date().toISOString(),
+      },
+      "Saved successfully",
+    ),
+  );
+});
+
+export const getProcessInsights = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const workspace = await getWorkspaceRow(pool, tenantId, userId, scenarioId);
+  const insights = parseJson(workspace?.AIInsightsJson) || {};
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        tenantId,
+        userId,
+        processInsights: insights.processInsights || null,
+      },
+      "Fetched successfully",
+    ),
+  );
+});
+
+export const saveScenarioAnalysis = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+  const scenarioAnalysis = req.body.scenarioAnalysis;
+
+  if (!tenantId || !userId || !scenarioId || !scenarioAnalysis) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId, scenarioId and scenarioAnalysis are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const result = await saveInsightsSection(
+    pool,
+    tenantId,
+    userId,
+    scenarioId,
+    "scenarioAnalysis",
+    scenarioAnalysis,
+    req.body,
+  );
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        section: "scenario-analysis",
+        savedAt: result.workspace?.ModifiedOn || new Date().toISOString(),
+      },
+      "Saved successfully",
+    ),
+  );
+});
+
+export const getScenarioAnalysis = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const workspace = await getWorkspaceRow(pool, tenantId, userId, scenarioId);
+  const insights = parseJson(workspace?.AIInsightsJson) || {};
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        tenantId,
+        userId,
+        scenarioAnalysis: insights.scenarioAnalysis || null,
+      },
+      "Fetched successfully",
+    ),
+  );
+});
+
+export const saveExecutiveSummary = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+  const executiveSummary = req.body.executiveSummary;
+
+  if (!tenantId || !userId || !scenarioId || !executiveSummary) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId, scenarioId and executiveSummary are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const result = await saveInsightsSection(
+    pool,
+    tenantId,
+    userId,
+    scenarioId,
+    "executiveSummary",
+    executiveSummary,
+    req.body,
+  );
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        section: "executive-summary",
+        savedAt: result.workspace?.ModifiedOn || new Date().toISOString(),
+      },
+      "Saved successfully",
+    ),
+  );
+});
+
+export const getExecutiveSummary = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const workspace = await getWorkspaceRow(pool, tenantId, userId, scenarioId);
+  const insights = parseJson(workspace?.AIInsightsJson) || {};
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        tenantId,
+        userId,
+        executiveSummary: insights.executiveSummary || null,
+      },
+      "Fetched successfully",
+    ),
+  );
+});
+
+export const getAIWorkspaceSnapshot = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  const workspace = await getWorkspaceRow(pool, tenantId, userId, scenarioId);
+  const insights = parseJson(workspace?.AIInsightsJson) || {};
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        tenantId,
+        userId,
+        assessment: parseJson(workspace?.AssessmentJson),
+        goalScope: parseJson(workspace?.GoalScopeJson),
+        processInsights: insights.processInsights || null,
+        scenarioAnalysis: insights.scenarioAnalysis || null,
+        executiveSummary: insights.executiveSummary || null,
+        modelId: workspace?.ModelId ?? null,
+        promptVersion: workspace?.PromptVersion ?? null,
+        status: workspace?.Status ?? null,
+      },
+      "Fetched successfully",
+    ),
+  );
+});
+
+export const saveWorkspaceSection = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+  const section = String(req.params.section || "").toLowerCase();
+  const sectionData = req.body.data;
+
+  if (!tenantId || !userId || !scenarioId || !section || sectionData === undefined) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId, scenarioId, section and data are required",
+    });
+  }
+
+  const allowedSections = [
+    "assessment",
+    "goal-scope",
+    "process-insights",
+    "scenario-analysis",
+    "executive-summary",
+  ];
+
+  if (!allowedSections.includes(section)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid section. Allowed values: assessment, goal-scope, process-insights, scenario-analysis, executive-summary",
+    });
+  }
+
+  const pool = await getPool2();
+  const scenario = await assertScenarioExists(pool, tenantId, userId, scenarioId, res);
+
+  if (!scenario) {
+    return;
+  }
+
+  let savedAt: any = new Date().toISOString();
+
+  if (section === "assessment") {
+    const result = await pool
+      .request()
+      .input("TenantId", tenantId)
+      .input("UserId", userId)
+      .input("ScenarioId", scenarioId)
+      .input("AssessmentJson", ensureJsonText(sectionData))
+      .query(UPSERT_SCENARIO_AI_WORKSPACE_ASSESSMENT);
+
+    savedAt = result.recordset?.[0]?.ModifiedOn || savedAt;
+  } else if (section === "goal-scope") {
+    const result = await pool
+      .request()
+      .input("TenantId", tenantId)
+      .input("UserId", userId)
+      .input("ScenarioId", scenarioId)
+      .input("GoalScopeJson", ensureJsonText(sectionData))
+      .query(UPSERT_SCENARIO_AI_WORKSPACE_GOAL_SCOPE);
+
+    savedAt = result.recordset?.[0]?.ModifiedOn || savedAt;
+  } else {
+    const sectionMap: Record<string, "processInsights" | "scenarioAnalysis" | "executiveSummary"> = {
+      "process-insights": "processInsights",
+      "scenario-analysis": "scenarioAnalysis",
+      "executive-summary": "executiveSummary",
+    };
+
+    const result = await saveInsightsSection(
+      pool,
+      tenantId,
+      userId,
+      scenarioId,
+      sectionMap[section],
+      sectionData,
+      req.body,
+    );
+
+    savedAt = result.workspace?.ModifiedOn || savedAt;
+  }
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        section,
+        savedAt,
+      },
+      "Saved successfully",
+    ),
+  );
+});
+
+export const generateAIInsights = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+  const modelId = req.body.modelId ? Number(req.body.modelId) : null;
+  const promptVersion = req.body.promptVersion || "lca-insights-v1";
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+
+  const scenarioResult = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .query(GET_SCENARIO_BY_ID);
+
+  if (!scenarioResult.recordset?.length) {
+    return res.status(404).json({
+      success: false,
+      message: "Scenario not found",
+    });
+  }
+
+  const scenario = scenarioResult.recordset[0];
+
+  const processResult = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .query(GET_SCENARIO_DETAILS);
+
+  const workspaceResult = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .query(GET_SCENARIO_AI_WORKSPACE);
+
+  const workspace = workspaceResult.recordset?.[0] || {};
+  const assessment = parseJson(workspace.AssessmentJson);
+  const goalScope = parseJson(workspace.GoalScopeJson);
+
+  const aiInput = buildAIInputPayload(scenario, processResult.recordset, assessment, goalScope);
+  const aiInsights = buildAIInsightsPayload(scenario, processResult.recordset, assessment, goalScope);
+
+  await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .input("AIInputJson", ensureJsonText(aiInput))
+    .input("AIInsightsJson", ensureJsonText(aiInsights))
+    .input("ModelId", modelId)
+    .input("PromptVersion", promptVersion)
+    .input("Status", "Generated")
+    .query(UPSERT_SCENARIO_AI_WORKSPACE_INSIGHTS);
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        insights: aiInsights,
+      },
+      "AI insights generated",
+    ),
+  );
+});
+
+export const getAIInsights = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = Number(req.params.tenantId);
+  const userId = Number(req.params.userId);
+  const scenarioId = Number(req.params.scenarioId);
+
+  if (!tenantId || !userId || !scenarioId) {
+    return res.status(400).json({
+      success: false,
+      message: "tenantId, userId and scenarioId are required",
+    });
+  }
+
+  const pool = await getPool2();
+
+  const workspaceResult = await pool
+    .request()
+    .input("TenantId", tenantId)
+    .input("UserId", userId)
+    .input("ScenarioId", scenarioId)
+    .query(GET_SCENARIO_AI_WORKSPACE);
+
+  const workspace = workspaceResult.recordset?.[0];
+
+  if (!workspace) {
+    return res.status(404).json({
+      success: false,
+      message: "AI workspace not found for scenario",
+    });
+  }
+
+  return res.json(
+    successResponse(
+      {
+        scenarioId,
+        status: workspace.Status,
+        assessment: parseJson(workspace.AssessmentJson),
+        goalScope: parseJson(workspace.GoalScopeJson),
+        insights: parseJson(workspace.AIInsightsJson),
+        modelId: workspace.ModelId,
+        promptVersion: workspace.PromptVersion,
+      },
+      "AI insights fetched",
+    ),
+  );
+});
+
+
+
