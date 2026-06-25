@@ -316,6 +316,150 @@ components:
                 $ref: "#/components/schemas/ScenarioProcessInput"
       description: Send scenarioId when updating an existing scenario. Send scenarioName when creating a scenario during the first bulk save.
 
+    AIAssessmentRequest:
+      type: object
+      required:
+        - assessment
+      properties:
+        assessment:
+          type: object
+          properties:
+            messages:
+              type: array
+              items:
+                type: object
+            answers:
+              type: array
+              items:
+                type: object
+                properties:
+                  question:
+                    type: string
+                  answer:
+                    type: string
+            progress:
+              type: integer
+              example: 100
+            isComplete:
+              type: boolean
+              example: true
+
+    GoalScopeRequest:
+      type: object
+      required:
+        - goalScope
+      properties:
+        goalScope:
+          type: object
+          properties:
+            selectedGoals:
+              type: array
+              items:
+                type: string
+            selectedBoundary:
+              type: string
+            functionalUnit:
+              type: string
+            referenceFlow:
+              type: string
+            isoStandard:
+              type: string
+
+    GenerateAIInsightsRequest:
+      type: object
+      properties:
+        modelId:
+          type: integer
+          nullable: true
+          example: 1
+        promptVersion:
+          type: string
+          nullable: true
+          example: lca-insights-v1
+
+    WorkspaceSectionSaveRequest:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          description: Section payload object. Shape depends on selected section.
+        aiInput:
+          type: object
+          nullable: true
+          description: Optional AI input payload, mainly for process-insights.
+        modelId:
+          type: integer
+          nullable: true
+        promptVersion:
+          type: string
+          nullable: true
+
+    WorkspaceSnapshotResponse:
+      type: object
+      properties:
+        scenarioId:
+          type: integer
+        tenantId:
+          type: integer
+        userId:
+          type: integer
+        assessment:
+          type: object
+          nullable: true
+        goalScope:
+          type: object
+          nullable: true
+        processInsights:
+          type: object
+          nullable: true
+        scenarioAnalysis:
+          type: object
+          nullable: true
+        executiveSummary:
+          type: object
+          nullable: true
+        modelId:
+          type: integer
+          nullable: true
+        promptVersion:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+
+    AIInsightsResponse:
+      type: object
+      properties:
+        scenarioId:
+          type: integer
+          example: 12
+        status:
+          type: string
+          example: Generated
+        assessment:
+          type: object
+        goalScope:
+          type: object
+        insights:
+          type: object
+          properties:
+            processInsights:
+              type: object
+            scenarioAnalysis:
+              type: object
+            executiveSummary:
+              type: object
+        modelId:
+          type: integer
+          example: 1
+          nullable: true
+        promptVersion:
+          type: string
+          example: lca-insights-v1
+
 security:
   - ApiKeyAuth: []
 
@@ -1002,3 +1146,115 @@ paths:
 
         "400":
           description: tenantId and userId are required
+
+  /api/v1/temp/scenario/{scenarioId}/{tenantId}/{userId}/ai-insights/generate:
+    post:
+      summary: Generate AI Insights
+      tags:
+        - Scenario Analysis
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: scenarioId
+          required: true
+          schema:
+            type: integer
+          description: Scenario ID
+        - in: path
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+          description: Tenant ID
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateAIInsightsRequest"
+      responses:
+        "200":
+          description: AI insights generated
+
+  /api/v1/temp/scenario/{scenarioId}/{tenantId}/{userId}/workspace:
+    get:
+      summary: Get AI Workspace Snapshot
+      tags:
+        - Scenario Analysis
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: scenarioId
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Workspace snapshot fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceSnapshotResponse"
+
+  /api/v1/temp/scenario/{scenarioId}/{tenantId}/{userId}/workspace/{section}:
+    put:
+      summary: Save Workspace Section
+      description: Save one section. Allowed section values are assessment, goal-scope, process-insights, scenario-analysis, executive-summary.
+      tags:
+        - Scenario Analysis
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: scenarioId
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: tenantId
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: section
+          required: true
+          schema:
+            type: string
+            enum:
+              - assessment
+              - goal-scope
+              - process-insights
+              - scenario-analysis
+              - executive-summary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceSectionSaveRequest"
+      responses:
+        "200":
+          description: Saved successfully

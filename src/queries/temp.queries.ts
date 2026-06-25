@@ -253,3 +253,181 @@ export const GET_SCENARIO_DETAILS = `
     )
   ORDER BY ProcessId
 `;
+
+export const GET_SCENARIO_AI_WORKSPACE = `
+SELECT TOP 1
+    WorkspaceId,
+    TenantId,
+    UserId,
+    ScenarioId,
+    AssessmentJson,
+    GoalScopeJson,
+    AIInputJson,
+    AIInsightsJson,
+    ModelId,
+    PromptVersion,
+    Status,
+    ErrorMessage,
+    CreatedOn,
+    ModifiedOn
+FROM LCA_ScenarioAIWorkspace
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+  AND ScenarioId = @ScenarioId
+`;
+
+export const UPSERT_SCENARIO_AI_WORKSPACE_ASSESSMENT = `
+IF EXISTS (
+    SELECT 1 FROM LCA_ScenarioAIWorkspace
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId
+)
+BEGIN
+    UPDATE LCA_ScenarioAIWorkspace
+    SET
+        AssessmentJson = @AssessmentJson,
+        ModifiedOn = GETDATE(),
+        Status = 'Draft',
+        ErrorMessage = NULL
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId;
+END
+ELSE
+BEGIN
+    INSERT INTO LCA_ScenarioAIWorkspace
+    (
+        TenantId,
+        UserId,
+        ScenarioId,
+        AssessmentJson,
+        Status,
+        CreatedOn,
+        ModifiedOn
+    )
+    VALUES
+    (
+        @TenantId,
+        @UserId,
+        @ScenarioId,
+        @AssessmentJson,
+        'Draft',
+        GETDATE(),
+        GETDATE()
+    );
+END
+
+SELECT TOP 1 *
+FROM LCA_ScenarioAIWorkspace
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+  AND ScenarioId = @ScenarioId
+`;
+
+export const UPSERT_SCENARIO_AI_WORKSPACE_GOAL_SCOPE = `
+IF EXISTS (
+    SELECT 1 FROM LCA_ScenarioAIWorkspace
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId
+)
+BEGIN
+    UPDATE LCA_ScenarioAIWorkspace
+    SET
+        GoalScopeJson = @GoalScopeJson,
+        ModifiedOn = GETDATE(),
+        Status = 'Draft',
+        ErrorMessage = NULL
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId;
+END
+ELSE
+BEGIN
+    INSERT INTO LCA_ScenarioAIWorkspace
+    (
+        TenantId,
+        UserId,
+        ScenarioId,
+        GoalScopeJson,
+        Status,
+        CreatedOn,
+        ModifiedOn
+    )
+    VALUES
+    (
+        @TenantId,
+        @UserId,
+        @ScenarioId,
+        @GoalScopeJson,
+        'Draft',
+        GETDATE(),
+        GETDATE()
+    );
+END
+
+SELECT TOP 1 *
+FROM LCA_ScenarioAIWorkspace
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+  AND ScenarioId = @ScenarioId
+`;
+
+export const UPSERT_SCENARIO_AI_WORKSPACE_INSIGHTS = `
+IF EXISTS (
+    SELECT 1 FROM LCA_ScenarioAIWorkspace
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId
+)
+BEGIN
+    UPDATE LCA_ScenarioAIWorkspace
+    SET
+        AIInputJson = @AIInputJson,
+        AIInsightsJson = @AIInsightsJson,
+        ModelId = @ModelId,
+        PromptVersion = @PromptVersion,
+        Status = @Status,
+        ErrorMessage = NULL,
+        ModifiedOn = GETDATE()
+    WHERE TenantId = @TenantId
+      AND UserId = @UserId
+      AND ScenarioId = @ScenarioId;
+END
+ELSE
+BEGIN
+    INSERT INTO LCA_ScenarioAIWorkspace
+    (
+        TenantId,
+        UserId,
+        ScenarioId,
+        AIInputJson,
+        AIInsightsJson,
+        ModelId,
+        PromptVersion,
+        Status,
+        CreatedOn,
+        ModifiedOn
+    )
+    VALUES
+    (
+        @TenantId,
+        @UserId,
+        @ScenarioId,
+        @AIInputJson,
+        @AIInsightsJson,
+        @ModelId,
+        @PromptVersion,
+        @Status,
+        GETDATE(),
+        GETDATE()
+    );
+END
+
+SELECT TOP 1 *
+FROM LCA_ScenarioAIWorkspace
+WHERE TenantId = @TenantId
+  AND UserId = @UserId
+  AND ScenarioId = @ScenarioId
+`;

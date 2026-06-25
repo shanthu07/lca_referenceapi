@@ -4,10 +4,13 @@ import {
   createScenario,
   deleteMyProcess,
   deleteScenario,
+  getAIWorkspaceSnapshot,
   getMyProcess,
   getMyScenarios,
   getProcessCategoryMaster,
   getScenarioDetails,
+  generateAIInsights,
+  saveWorkspaceSection,
   saveScenarioProcess,
   saveScenarioProcessesBulk,
 } from "../../controllers/modules/scenario_analysis/temp_controller";
@@ -26,5 +29,9 @@ router.post("/scenario-process", saveScenarioProcess);
 router.post("/scenario-process/bulk", saveScenarioProcessesBulk);
 router.get("/scenario-process/details", getScenarioDetails);
 
+// ---------------------------    AI Workspace Routes  ------------------------------------- //
+router.post("/scenario/:scenarioId/:tenantId/:userId/ai-insights/generate", generateAIInsights);
+router.get("/scenario/:scenarioId/:tenantId/:userId/workspace", getAIWorkspaceSnapshot);
+router.put("/scenario/:scenarioId/:tenantId/:userId/workspace/:section", saveWorkspaceSection);
 
 export default router;
