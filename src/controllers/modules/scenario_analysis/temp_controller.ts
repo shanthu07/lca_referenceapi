@@ -294,6 +294,7 @@ export const saveScenarioProcess = asyncHandler(async (req: Request, res: Respon
     processId,
     amount,
     activityDescription,
+    notes,
   } = req.body;
   let scenarioId = Number(req.body.scenarioId);
   const scenarioName = req.body.scenarioName?.trim();
@@ -345,6 +346,7 @@ export const saveScenarioProcess = asyncHandler(async (req: Request, res: Respon
       .input("ProcessId", processId)
       .input("Amount", amount)
       .input("ActivityDescription", activityDescription)
+      .input("Notes", notes)
       .query(UPSERT_SCENARIO_PROCESS);
 
     await transaction.commit();
@@ -430,6 +432,7 @@ export const saveScenarioProcessesBulk = asyncHandler(
           .input("ProcessId", Number(process.processId))
           .input("Amount", process.amount)
           .input("ActivityDescription", process.activityDescription)
+            .input("Notes", process.notes)
           .query(UPSERT_SCENARIO_PROCESS);
       }
 

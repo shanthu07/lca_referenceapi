@@ -275,6 +275,10 @@ components:
           type: string
           nullable: true
           example: Monthly electricity consumption
+        notes:
+          type: string
+          nullable: true
+          example: Monthly electricity bill entry
 
     SaveScenarioProcessRequest:
       allOf:
@@ -296,6 +300,10 @@ components:
               type: string
               nullable: true
               example: Monthly electricity consumption
+            notes:
+              type: string
+              nullable: true
+              example: Monthly electricity bill entry
       description: Send scenarioId when updating an existing scenario. Send scenarioName when creating a scenario during the first process save.
 
     SaveScenarioProcessesBulkRequest:
@@ -983,6 +991,7 @@ paths:
                   processId: 101
                   amount: 250
                   activityDescription: Monthly electricity consumption
+                  notes: Initial baseline value
               updateExistingScenarioProcess:
                 summary: Update or insert one process in an existing scenario
                 value:
@@ -990,6 +999,7 @@ paths:
                   processId: 101
                   amount: 300
                   activityDescription: Updated electricity consumption
+                  notes: Revised after meter reading
 
       responses:
         "200":
@@ -1062,9 +1072,11 @@ paths:
                     - processId: 101
                       amount: 250
                       activityDescription: Monthly electricity consumption
+                      notes: Initial baseline value
                     - processId: 102
                       amount: 80
                       activityDescription: Diesel usage
+                      notes: Generator logbook value
               updateExistingScenarioProcesses:
                 summary: Update or insert multiple processes in an existing scenario
                 value:
@@ -1073,9 +1085,11 @@ paths:
                     - processId: 101
                       amount: 300
                       activityDescription: Updated electricity consumption
+                      notes: Revised after meter reading
                     - processId: 102
                       amount: 90
                       activityDescription: Updated diesel usage
+                      notes: Revised from invoice
 
       responses:
         "200":

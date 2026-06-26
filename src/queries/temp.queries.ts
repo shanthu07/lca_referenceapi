@@ -202,7 +202,8 @@ BEGIN
     UPDATE LCA_ScenarioProcess
     SET 
         Amount = @Amount,
-        ActivityDescription = @ActivityDescription
+    ActivityDescription = @ActivityDescription,
+    Notes = @Notes
     WHERE TenantId = @TenantId
       AND UserId = @UserId
       AND ScenarioId = @ScenarioId
@@ -220,6 +221,7 @@ BEGIN
         ProcessId,
         Amount,
         ActivityDescription,
+        Notes,
         CreatedOn
     )
     VALUES
@@ -230,6 +232,7 @@ BEGIN
         @ProcessId,
         @Amount,
         @ActivityDescription,
+        @Notes,
         GETDATE()
     )
 
